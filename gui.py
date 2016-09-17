@@ -21,11 +21,8 @@ from kivy.uix.widget import Widget
 
 #make it search upon user hitting enter
 def on_enter(instance, value):
-  print('User pressed enter in', instance)
+  print('The widget', instance, 'have:', value)
   
-  textinput = TextInput()
-  textinput.bind(text=on_text)
-
 #make search window
 class searchScreen(GridLayout):
   def __init__(self, **kwargs):
@@ -36,6 +33,8 @@ class searchScreen(GridLayout):
     #self.add_widget(Label(text='Search:'))
     self.searchQuery = TextInput(multiline=False, label='search', font_size=32, cursor_blink=True, hint_text='Type question and press Enter key to continue')
     self.add_widget(self.searchQuery)
+    self.searchQuery.bind(on_text_validate=on_enter)
+    
     #Window.size = (500, 50)
 
 class MyApp(App):
