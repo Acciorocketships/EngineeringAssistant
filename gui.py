@@ -3,14 +3,21 @@ import sys
 import assistant
 kivy.require('1.9.1')
 
+from kivy.config import Config
+
+if sys.platform == "linux" or sys.platform == "linux2":
+  Config.set('graphics', 'height', '0')
+elif sys.platform == "darwin":
+  Config.set('graphics', 'height', '50')
+  Config.set('graphics', 'fullscreen', 'fake')
 #importing necessary kivy files
 
 
 #unfortunately setting fullscreen to fake is deprecated, preferred method is setting Window.borderless to True
-from kivy.config import Config
-Config.set('graphics', 'width', '800')
+#from kivy.config import Config
+#Config.set('graphics', 'width', '800')
 #when fullscreen is true, set height to 50. With fullscreen off and borderless true, set height to 0.
-Config.set('graphics', 'height', '0')
+#Config.set('graphics', 'height', '50')
 #Config.set('graphics', 'fullscreen', 'fake')
 
 from kivy.app import App
