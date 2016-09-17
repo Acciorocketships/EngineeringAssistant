@@ -9,7 +9,7 @@ import urllib2
 import gmplot
 import string
 import subprocess
-import matlab
+#import matlab
 from datetime import datetime
 witclient = Wit(access_token="Y2TXOOVIUF5444QL5U3OYV7MGRLRIJUW", actions={})
 wolframclient = wolframalpha.Client('KHE5G2-42E4UX5AL3')

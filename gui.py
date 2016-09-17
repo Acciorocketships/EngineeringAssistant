@@ -1,6 +1,6 @@
 import kivy
 import sys
-import speech
+import assistant
 kivy.require('1.9.1')
 
 #importing necessary kivy files
@@ -24,9 +24,11 @@ from kivy.uix.widget import Widget
 #make it search upon user hitting enter
 def on_enter(value):
   print('have:', str(value.text))
-  if str(value.text)=='exit' or 'quit':
+  if str(value.text)==('exit' or 'quit'):
     sys.exit(0)
-
+  
+  assistant.getintents(value.text)
+  assistant.runaction()
 #make search window
 class searchScreen(GridLayout):
   def __init__(self, **kwargs):
