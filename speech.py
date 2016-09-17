@@ -4,12 +4,15 @@ import wolframalpha
 import speech_recognition as sr
 import googlemaps
 import json
+import math
 import urllib2
 import gmplot
+import string
+import subprocess
 from datetime import datetime
 witclient = Wit(access_token="Y2TXOOVIUF5444QL5U3OYV7MGRLRIJUW", actions={})
 wolframclient = wolframalpha.Client('KHE5G2-42E4UX5AL3')
-googleclient = googlemaps.Client(key='AIzaSyDpiP-1JYBIfuvfgmuDdxzhYX4FW-XmC0k')
+googleclient = googlemaps.Client(key='AIzaSyDgc8KUW9ZoOUz65bD2mfSElHj-HmztEaI')
 
 class Pod:
     def __init__(self):
@@ -92,16 +95,42 @@ def wolfram():
         pods[-1].imgurl = result['subpod']['img']['@src']
 
 def directions():
-    currentlocation = location_lookup()['loc']
+    # Setup
+    currentlocation = locationlookup()
     lat = []
     lng = []
-    instructions = []
-    lat.append(float(currentlocation[:currentlocation.find(",")-1]))
-    lng.append(float(currentlocation[currentlocation.find(",")+1:]))
-    directions = googleclient.directions(currentlocation,"Concord,MA",mode="driving")
-    gmap = gmplot.GoogleMapPlotter(lat[0],lng[0],16)
+    pods.append(Pod())
+    pods.append(Pod())
+    pods[0].name = "Map"
+    pods[1].name = "Instructions"
+    # Get Destination
+    if 'location' in witai.response['entities']:
+        placename = witai.response['entities']['location'][0]['value']
+    else:
+        splitindex = witai.query.rfind(' ',0,witai.query.rfind(' ')-1)
+        placename = witai.query[splitindex:]
+    destination = googleclient.places(placename,location=currentlocation)
+    destination = destination['results'][0]['geometry']['location']
+    # Get Directions
+    directions = googleclient.directions(currentlocation,destination,mode="driving",departure_time=datetime.now())
+    # Update Pods and Long/Lat arrays
+    pods[0].imgurl = "map.html"
+    pods[0].text = "Directions from " + directions[0]['legs'][0]['start_address'] + " to " + directions[0]['legs'][0]['end_address']
+    lat.append(directions[0]['legs'][0]['steps'][0]['start_location']['lat'])
+    lng.append(directions[0]['legs'][0]['steps'][0]['start_location']['lng'])
+    for step in directions[0]['legs'][0]['steps']:
+        pods[1].text += step['html_instructions'].replace("<b>","").replace("</b>","").replace('<div style="font-size:0.9em">','').replace("</div>","") + "\n"
+        lat.append(step['end_location']['lat'])
+        lng.append(step['end_location']['lng'])
+    # Create Map
+    zoom = zoomlevel(directions[0]['bounds']['northeast']['lat'],directions[0]['bounds']['southwest']['lat'],directions[0]['bounds']['northeast']['lng'],directions[0]['bounds']['southwest']['lng'])
+    gmap = gmplot.GoogleMapPlotter(lat[0],lng[0],zoom)
     gmap.plot(lat,lng,'cornflowerblue',edge_width=10)
-    gmap.draw("mymap.html")
+    gmap.draw("map.html")
+
+
+def matlab():
+    subprocess.call(["/usr/bin/open", "-W", "-n", "-a", "/Applications/MATLAB.app"])
 
 
 def calendar():
@@ -110,14 +139,30 @@ def calendar():
 
 # HELPER FUNCTIONS
 
+
 actions = {
     'Wolfram' : wolfram,
     'Directions' : directions,
-    'Calendar' : calendar
+    'Calendar' : calendar,
+    'Matlab' : matlab
 }
 
-def location_lookup():
-  try:
-    return json.load(urllib2.urlopen('http://ipinfo.io/json'))
-  except urllib2.HTTPError:
-    return False
+def zoomlevel(maxlat,minlat,maxlng,minlng):
+    latdiff = abs(maxlat - minlat)*120/180
+    lngdiff = (maxlng - minlng)*100/360
+    if lngdiff < 0:
+        lngdiff += 100
+    scope = max(latdiff,lngdiff)
+    zoom = 1.4*math.log(1/(8000*scope)) + 20.5
+    if zoom > 18:
+        zoom = 18
+    elif zoom < 2:
+        zoom = 2
+    return zoom
+    
+
+def locationlookup():
+    try:
+        return json.load(urllib2.urlopen('http://ipinfo.io/json'))['loc']
+    except urllib2.HTTPError:
+        return False

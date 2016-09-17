@@ -1,5 +1,5 @@
 import speech
 
-query = "Directions to 37th and market street"
+query = "rref [1 0; 0 1]"
 intents = speech.getintents(query)
 speech.runaction()
