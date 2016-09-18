@@ -12,7 +12,7 @@ elif sys.platform == "darwin":
   Config.set('graphics', 'fullscreen', 'fake')
   Config.set('graphics', 'position', 'custom')
   Config.set('graphics', 'left', 300)
-  Config.set('graphics', 'top', -500)
+  Config.set('graphics', 'top', -700)
 #importing necessary kivy files
 
 
