@@ -10,12 +10,15 @@ if sys.platform == "linux" or sys.platform == "linux2":
 elif sys.platform == "darwin":
   Config.set('graphics', 'height', '50')
   Config.set('graphics', 'fullscreen', 'fake')
+  Config.set('graphics', 'position', 'custom')
+  Config.set('graphics', 'left', 500)
+  Config.set('graphics', 'top', 10)
 #importing necessary kivy files
 
 
 #unfortunately setting fullscreen to fake is deprecated, preferred method is setting Window.borderless to True
 #from kivy.config import Config
-#Config.set('graphics', 'width', '800')
+Config.set('graphics', 'width', '850')
 #when fullscreen is true, set height to 50. With fullscreen off and borderless true, set height to 0.
 #Config.set('graphics', 'height', '50')
 #Config.set('graphics', 'fullscreen', 'fake')
@@ -27,6 +30,9 @@ from kivy.uix.textinput import TextInput
 from kivy.core.window import Window
 from kivy.uix.widget import Widget
 
+from kivy.uix.dropdown import DropDown
+from kivy.uix.button import Button
+from kivy.base import runTouchApp
 
 #make it search upon user hitting enter
 def on_enter(value):
@@ -36,6 +42,26 @@ def on_enter(value):
   
   assistant.getintents(value.text)
   assistant.runaction()
+  return resultScreen()
+
+#expand once we get results
+class resultScreen(GridLayout):
+  def __init__(self, **kwargs):
+    super(resultScreen, self).__init__(**kwargs)
+    print "works"
+    self.cols = 1
+    #self.row_force_default=True
+    self.row_default_height=80
+    self.clear_widgets()
+    self.add_widget(Label(text="hello", size_hint_x=None, width=100)) 
+    for pod in assistant.pods:
+      if pod.imgurl=='':
+        self.add_widget(Label(text=pod.text, size_hint_x=None, width=100))
+      else:
+        self.add_widget(Image(source=imgurl))
+
+
+
 #make search window
 class searchScreen(GridLayout):
   def __init__(self, **kwargs):
@@ -53,9 +79,14 @@ class searchScreen(GridLayout):
 class MyApp(App):
   def build(self):
     Window.borderless = True
+    #layout = GridLayout(cols=2)
+    #layout.add_widget(Button(text='hello1'))
+    #layout.add_widget(Button(text='hello2'))
+    #return layout
     #Window.clearcolor = (1, 1, 1, .2)
-#    return Label(text='Hello World')
+    #return Label(text='Hello World')
     return searchScreen()
 
 if __name__ == '__main__':
   MyApp().run()
+
