@@ -9,11 +9,12 @@ import urllib2
 import gmplot
 import string
 import subprocess
-#import matlab
+import matlab.engine as matlab
 from datetime import datetime
 witclient = Wit(access_token="Y2TXOOVIUF5444QL5U3OYV7MGRLRIJUW", actions={})
 wolframclient = wolframalpha.Client('KHE5G2-42E4UX5AL3')
 googleclient = googlemaps.Client(key='AIzaSyDgc8KUW9ZoOUz65bD2mfSElHj-HmztEaI')
+matlabclient = matlab.start_matlab()
 
 class Pod:
     def __init__(self):
@@ -55,7 +56,7 @@ def text2speech(text, savefile):
     return data
 
 
-def chatbot(text):
+def bot(text):
 	br = mechanize.Browser()
 	br.set_handle_robots(False)
 	br.open('http://pandorabots.com/pandora/talk?botid=cf7aa84b0e34555c')
@@ -76,16 +77,24 @@ def speech2text():
     return text
 
 
+def getnumpods():
+    return len(pods)
+
+
 def getintents(query):
     witai.query = query
     witai.response = witclient.message(query)
     if 'intents' in witai.response['entities']:
         for intentnum in range(0,len(witai.response['entities']['intents'])):
             witai.intents.append(witai.response['entities']['intents'][intentnum]['value'])
+    else:
+        actions['Chatbot']()
+
 
 def runaction():
     for intent in witai.intents:
         actions[intent]()    
+
 
 def wolfram():
     response = wolframclient.query(witai.query)
@@ -95,6 +104,7 @@ def wolfram():
         pods[-1].text = result['subpod']['plaintext']
         pods[-1].imgurl = result['subpod']['img']['@src']
 
+
 def directions():
     # Setup
     currentlocation = locationlookup()
@@ -102,8 +112,8 @@ def directions():
     lng = []
     pods.append(Pod())
     pods.append(Pod())
-    pods[0].name = "Map"
-    pods[1].name = "Instructions"
+    pods[-2].name = "Map"
+    pods[-1].name = "Instructions"
     # Get Destination
     if 'location' in witai.response['entities']:
         placename = witai.response['entities']['location'][0]['value']
@@ -114,28 +124,56 @@ def directions():
     destination = destination['results'][0]['geometry']['location']
     # Get Directions
     directions = googleclient.directions(currentlocation,destination,mode="driving",departure_time=datetime.now())
-    # Update Pods and Long/Lat arrays
-    pods[0].imgurl = "map.html"
-    pods[0].text = "Directions from " + directions[0]['legs'][0]['start_address'] + " to " + directions[0]['legs'][0]['end_address']
-    lat.append(directions[0]['legs'][0]['steps'][0]['start_location']['lat'])
-    lng.append(directions[0]['legs'][0]['steps'][0]['start_location']['lng'])
-    for step in directions[0]['legs'][0]['steps']:
-        pods[1].text += step['html_instructions'].replace("<b>","").replace("</b>","").replace('<div style="font-size:0.9em">','').replace("</div>","") + "\n"
-        lat.append(step['end_location']['lat'])
-        lng.append(step['end_location']['lng'])
-    # Create Map
-    zoom = zoomlevel(directions[0]['bounds']['northeast']['lat'],directions[0]['bounds']['southwest']['lat'],directions[0]['bounds']['northeast']['lng'],directions[0]['bounds']['southwest']['lng'])
-    gmap = gmplot.GoogleMapPlotter(lat[0],lng[0],zoom)
-    gmap.plot(lat,lng,'cornflowerblue',edge_width=10)
-    gmap.draw("map.html")
+    if (len(directions) != 0):
+        # Update Pods and Long/Lat arrays
+        pods[-2].imgurl = "map.html"
+        pods[-2].text = "Directions from " + directions[0]['legs'][0]['start_address'] + " to " + directions[0]['legs'][0]['end_address']
+        lat.append(directions[0]['legs'][0]['steps'][0]['start_location']['lat'])
+        lng.append(directions[0]['legs'][0]['steps'][0]['start_location']['lng'])
+        for step in directions[0]['legs'][0]['steps']:
+            pods[-1].text += step['html_instructions'].replace("<b>","").replace("</b>","").replace('<div style="font-size:0.9em">','').replace("</div>","") + "\n"
+            lat.append(step['end_location']['lat'])
+            lng.append(step['end_location']['lng'])
+        # Create Map
+        zoom = zoomlevel(directions[0]['bounds']['northeast']['lat'],directions[0]['bounds']['southwest']['lat'],directions[0]['bounds']['northeast']['lng'],directions[0]['bounds']['southwest']['lng'])
+        gmap = gmplot.GoogleMapPlotter(lat[0],lng[0],zoom)
+        gmap.plot(lat,lng,'cornflowerblue',edge_width=10)
+        gmap.draw("map.html")
 
 
 def matlab():
-    subprocess.call(["/usr/bin/open", "-W", "-n", "-a", "/Applications/MATLAB.app"])
+    lb = witai.query.find('[')
+    ub = witai.query.find(']',lb)
+    if lb != -1 and ub != -1:
+        matrixstring = witai.query[lb:ub]
+        numrows = matrixstring.count(';') + 1
+        matrixstring = matrixstring.replace(","," ").replace(";"," ")[1:]
+        output = matlabclient.reducematrix(matrixstring,numrows)
+        matrix = ''
+        for x in range(numrows):
+            line = '['
+            for y in range(len(output[0])):
+                line += '%6.3f ' % output[x][y]
+            line += ']\n'
+            matrix += line
+        pods.append(Pod())
+        pods[-1].name = "Matrix Row Reduction"
+        pods[-1].text = matrix
 
 
-def calendar():
-    print("Running calendar action")
+def openapp():
+    application = witai.query.rsplit(" ",1)[-1]
+    path = "/Applications/" + application + ".app"
+    subprocess.call(["/usr/bin/open", "-W", "-n", "-a", path])
+
+
+def chatbot():
+    response = bot(witai.query)
+    pods.append(Pod())
+    pods[-1].name = "GLADoS's Response:"
+    pods[-1].text = response
+    print(response)
+
 
 
 # HELPER FUNCTIONS
@@ -144,9 +182,11 @@ def calendar():
 actions = {
     'Wolfram' : wolfram,
     'Directions' : directions,
-    'Calendar' : calendar,
-    'Matlab' : matlab
+    'Matlab' : matlab,
+    'Openapp' : openapp,
+    'Chatbot' : chatbot
 }
+
 
 def zoomlevel(maxlat,minlat,maxlng,minlng):
     latdiff = abs(maxlat - minlat)*120/180
