@@ -17,17 +17,17 @@ googleclient = googlemaps.Client(key='AIzaSyDgc8KUW9ZoOUz65bD2mfSElHj-HmztEaI')
 matlabclient = matlab.start_matlab()
 
 class Pod:
-    def __init__(self):
-        self.name = ""
-        self.text = ""
-        self.imgurl = ""
+	def __init__(self):
+		self.name = ""
+		self.text = ""
+		self.imgurl = ""
 
 class Witai:
-    def __init__(self):
-        self.query = ""
-        self.response = {}
-        self.intents = []
-        #self.arguments = []
+	def __init__(self):
+		self.query = ""
+		self.response = {}
+		self.intents = []
+		#self.arguments = []
 
 pods = []
 witai = Witai()
@@ -37,29 +37,32 @@ witai = Witai()
 
 
 def text2speech(text, savefile):
-    url = 'http://www.wizzardspeech.com/att_demo.html'
-    br = mechanize.Browser()
-    br.set_handle_robots(False)
-    br.open(url)
-    br.select_form(nr=0)
-    br['speaktext'] = text
-    br['speaker'] = ['crystal16']
-    submitlink = br.submit()
-    html = submitlink.read()
-    linkstart = html.find('MyFile=')
-    linkend = html.find('.wav')
-    filename = html[linkstart + 7:linkend + 4]
-    data = br.open('http://www.wizzardspeech.com/php_tmp/' + filename).read()
-    if savefile:
-        with open('output.wav', 'wb') as file:
-            file.write(data)
-    return data
+	url = 'http://www.wizzardspeech.com/att_demo.html'
+	br = mechanize.Browser()
+	br.set_handle_robots(False)
+	br.open(url)
+	br.select_form(nr=0)
+	br['speaktext'] = text
+	br['speaker'] = ['crystal16']
+	submitlink = br.submit()
+	html = submitlink.read()
+	linkstart = html.find('MyFile=')
+	linkend = html.find('.wav')
+	filename = html[linkstart + 7:linkend + 4]
+	data = br.open('http://www.wizzardspeech.com/php_tmp/' + filename).read()
+	if savefile:
+		with open('output.wav', 'wb') as file:
+			file.write(data)
+	return data
 
 
 def bot(text):
 	br = mechanize.Browser()
 	br.set_handle_robots(False)
-	br.open('http://pandorabots.com/pandora/talk?botid=cf7aa84b0e34555c')
+	try:
+		br.open('http://pandorabots.com/pandora/talk?botid=cf7aa84b0e34555c')
+	except:
+		return ""
 	br.select_form(nr=0)
 	br["input"] = text
 	html = br.submit().read()
@@ -69,141 +72,146 @@ def bot(text):
 	return response
 
 
+
 def speech2text():
-    recognizer = sr.Recognizer()
-    with sr.Microphone() as source:
-        audio = recognizer.listen(source)
-    text = recognizer.recognize_google(audio)
-    return text
+	recognizer = sr.Recognizer()
+	with sr.Microphone() as source:
+		audio = recognizer.listen(source)
+	text = recognizer.recognize_google(audio)
+	return text
 
 
 def getnumpods():
-    return len(pods)
+	return len(pods)
 
 
 def getintents(query):
-    witai.query = query
-    witai.response = witclient.message(query)
-    if 'intents' in witai.response['entities']:
-        for intentnum in range(0,len(witai.response['entities']['intents'])):
-            witai.intents.append(witai.response['entities']['intents'][intentnum]['value'])
-    else:
-        actions['Chatbot']()
+	witai.query = query
+	witai.response = witclient.message(query)
+	if 'intents' in witai.response['entities']:
+		for intentnum in range(0,len(witai.response['entities']['intents'])):
+			witai.intents.append(witai.response['entities']['intents'][intentnum]['value'])
+	else:
+		if query.find("+") != -1 or query.find("-") != -1 or query.find("*") != -1 or query.find("/") != -1:
+			actions['Wolfram']()
+		if len(pods) == 0:
+			actions['Chatbot']()
 
 
 def runaction():
-    for intent in witai.intents:
-        actions[intent]()    
+	for intent in witai.intents:
+		actions[intent]()    
 
 
 def wolfram():
-    response = wolframclient.query(witai.query)
-    for result in response.results:
-        pods.append(Pod())
-        pods[-1].name = result['@title']
-        pods[-1].text = result['subpod']['plaintext']
-        pods[-1].imgurl = result['subpod']['img']['@src']
+	response = wolframclient.query(witai.query)
+	for result in response.results:
+		pods.append(Pod())
+		pods[-1].name = result['@title']
+		pods[-1].text = result['subpod']['plaintext']
+		pods[-1].imgurl = result['subpod']['img']['@src']
+		print(pods[-1].text)
 
 
 def directions():
-    # Setup
-    currentlocation = locationlookup()
-    lat = []
-    lng = []
-    pods.append(Pod())
-    pods.append(Pod())
-    pods[-2].name = "Map"
-    pods[-1].name = "Instructions"
-    # Get Destination
-    if 'location' in witai.response['entities']:
-        placename = witai.response['entities']['location'][0]['value']
-    else:
-        splitindex = witai.query.rfind(' ',0,witai.query.rfind(' ')-1)
-        placename = witai.query[splitindex:]
-    destination = googleclient.places(placename,location=currentlocation)
-    destination = destination['results'][0]['geometry']['location']
-    # Get Directions
-    directions = googleclient.directions(currentlocation,destination,mode="driving",departure_time=datetime.now())
-    if (len(directions) != 0):
-        # Update Pods and Long/Lat arrays
-        pods[-2].imgurl = "map.html"
-        pods[-2].text = "Directions from " + directions[0]['legs'][0]['start_address'] + " to " + directions[0]['legs'][0]['end_address']
-        lat.append(directions[0]['legs'][0]['steps'][0]['start_location']['lat'])
-        lng.append(directions[0]['legs'][0]['steps'][0]['start_location']['lng'])
-        for step in directions[0]['legs'][0]['steps']:
-            pods[-1].text += step['html_instructions'].replace("<b>","").replace("</b>","").replace('<div style="font-size:0.9em">','').replace("</div>","") + "\n"
-            lat.append(step['end_location']['lat'])
-            lng.append(step['end_location']['lng'])
-        # Create Map
-        zoom = zoomlevel(directions[0]['bounds']['northeast']['lat'],directions[0]['bounds']['southwest']['lat'],directions[0]['bounds']['northeast']['lng'],directions[0]['bounds']['southwest']['lng'])
-        gmap = gmplot.GoogleMapPlotter(lat[0],lng[0],zoom)
-        gmap.plot(lat,lng,'cornflowerblue',edge_width=10)
-        gmap.draw("map.html")
+	# Setup
+	currentlocation = locationlookup()
+	lat = []
+	lng = []
+	pods.append(Pod())
+	pods.append(Pod())
+	pods[-2].name = "Map"
+	pods[-1].name = "Instructions"
+	# Get Destination
+	if 'location' in witai.response['entities']:
+		placename = witai.response['entities']['location'][0]['value']
+	else:
+		splitindex = witai.query.rfind(' ',0,witai.query.rfind(' ')-1)
+		placename = witai.query[splitindex:]
+	destination = googleclient.places(placename,location=currentlocation)
+	destination = destination['results'][0]['geometry']['location']
+	# Get Directions
+	directions = googleclient.directions(currentlocation,destination,mode="driving",departure_time=datetime.now())
+	if (len(directions) != 0):
+		# Update Pods and Long/Lat arrays
+		pods[-2].imgurl = "map.html"
+		pods[-2].text = "Directions from " + directions[0]['legs'][0]['start_address'] + " to " + directions[0]['legs'][0]['end_address']
+		lat.append(directions[0]['legs'][0]['steps'][0]['start_location']['lat'])
+		lng.append(directions[0]['legs'][0]['steps'][0]['start_location']['lng'])
+		for step in directions[0]['legs'][0]['steps']:
+			pods[-1].text += step['html_instructions'].replace("<b>","").replace("</b>","").replace('<div style="font-size:0.9em">','').replace("</div>","") + "\n"
+			lat.append(step['end_location']['lat'])
+			lng.append(step['end_location']['lng'])
+		# Create Map
+		zoom = zoomlevel(directions[0]['bounds']['northeast']['lat'],directions[0]['bounds']['southwest']['lat'],directions[0]['bounds']['northeast']['lng'],directions[0]['bounds']['southwest']['lng'])
+		gmap = gmplot.GoogleMapPlotter(lat[0],lng[0],zoom)
+		gmap.plot(lat,lng,'cornflowerblue',edge_width=10)
+		gmap.draw("map.html")
 
 
 def matlab():
-    lb = witai.query.find('[')
-    ub = witai.query.find(']',lb)
-    if lb != -1 and ub != -1:
-        matrixstring = witai.query[lb:ub]
-        numrows = matrixstring.count(';') + 1
-        matrixstring = matrixstring.replace(","," ").replace(";"," ")[1:]
-        output = matlabclient.reducematrix(matrixstring,numrows)
-        matrix = ''
-        for x in range(numrows):
-            line = '['
-            for y in range(len(output[0])):
-                line += '%6.3f ' % output[x][y]
-            line += ']\n'
-            matrix += line
-        pods.append(Pod())
-        pods[-1].name = "Matrix Row Reduction"
-        pods[-1].text = matrix
+	lb = witai.query.find('[')
+	ub = witai.query.find(']',lb)
+	if lb != -1 and ub != -1:
+		matrixstring = witai.query[lb:ub]
+		numrows = matrixstring.count(';') + 1
+		matrixstring = matrixstring.replace(","," ").replace(";"," ")[1:]
+		output = matlabclient.reducematrix(matrixstring,numrows)
+		matrix = ''
+		for x in range(numrows):
+			line = '['
+			for y in range(len(output[0])):
+				line += '%6.3f ' % output[x][y]
+			line += ']\n'
+			matrix += line
+		pods.append(Pod())
+		pods[-1].name = "Matrix Row Reduction"
+		pods[-1].text = matrix
 
 
 def openapp():
-    application = witai.query.rsplit(" ",1)[-1]
-    path = "/Applications/" + application + ".app"
-    subprocess.call(["/usr/bin/open", "-W", "-n", "-a", path])
+	application = witai.query.rsplit(" ",1)[-1]
+	path = "/Applications/" + application + ".app"
+	subprocess.call(["/usr/bin/open", "-W", "-n", "-a", path])
 
 
 def chatbot():
-    response = bot(witai.query)
-    pods.append(Pod())
-    pods[-1].name = "GLADoS's Response:"
-    pods[-1].text = response
-    print(response)
-
+	response = ""
+	response = bot(witai.query)
+	if len(response) != 0:
+		pods.append(Pod())
+		pods[-1].name = "GLADoS's Response:"
+		pods[-1].text = response
 
 
 # HELPER FUNCTIONS
 
 
 actions = {
-    'Wolfram' : wolfram,
-    'Directions' : directions,
-    'Matlab' : matlab,
-    'Openapp' : openapp,
-    'Chatbot' : chatbot
+	'Wolfram' : wolfram,
+	'Directions' : directions,
+	'Matlab' : matlab,
+	'Openapp' : openapp,
+	'Chatbot' : chatbot
 }
 
 
 def zoomlevel(maxlat,minlat,maxlng,minlng):
-    latdiff = abs(maxlat - minlat)*120/180
-    lngdiff = (maxlng - minlng)*100/360
-    if lngdiff < 0:
-        lngdiff += 100
-    scope = max(latdiff,lngdiff)
-    zoom = 1.4*math.log(1/(8000*scope)) + 20.5
-    if zoom > 18:
-        zoom = 18
-    elif zoom < 2:
-        zoom = 2
-    return zoom
-    
+	latdiff = abs(maxlat - minlat)*120/180
+	lngdiff = (maxlng - minlng)*100/360
+	if lngdiff < 0:
+		lngdiff += 100
+	scope = max(latdiff,lngdiff)
+	zoom = 1.4*math.log(1/(8000*scope)) + 20.5
+	if zoom > 18:
+		zoom = 18
+	elif zoom < 2:
+		zoom = 2
+	return zoom
+	
 
 def locationlookup():
-    try:
-        return json.load(urllib2.urlopen('http://ipinfo.io/json'))['loc']
-    except urllib2.HTTPError:
-        return False
+	try:
+		return json.load(urllib2.urlopen('http://ipinfo.io/json'))['loc']
+	except urllib2.HTTPError:
+		return False

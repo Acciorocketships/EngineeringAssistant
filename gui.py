@@ -29,7 +29,8 @@ from kivy.uix.label import Label
 from kivy.uix.textinput import TextInput
 from kivy.core.window import Window
 from kivy.uix.widget import Widget
-
+from kivy.uix.image import AsyncImage
+#CHANGE ^^^
 from kivy.uix.dropdown import DropDown
 from kivy.uix.button import Button
 from kivy.base import runTouchApp
@@ -55,11 +56,11 @@ class resultScreen(GridLayout):
     self.clear_widgets()
     self.add_widget(Label(text="hello", size_hint_x=None, width=100)) 
     for pod in assistant.pods:
-      if pod.imgurl=='':
+      if pod.imgurl == '':
         self.add_widget(Label(text=pod.text, size_hint_x=None, width=100))
       else:
-        self.add_widget(Image(source=imgurl))
-
+        self.add_widget(AsyncImage(source=pod.imgurl))
+        # CHANGE ^^^
 
 
 #make search window
