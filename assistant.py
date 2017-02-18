@@ -1,39 +1,72 @@
 import mechanize
-from wit import Wit
 import wolframalpha
-import speech_recognition as sr
-import googlemaps
 import json
-import math
+import urllib
 import urllib2
-import gmplot
-import string
 import subprocess
-import matlab.engine as matlab
+import googlemaps
+import speech_recognition as sr
+import PIL
+from PIL import Image
+from wit import Wit
 from datetime import datetime
 witclient = Wit(access_token="Y2TXOOVIUF5444QL5U3OYV7MGRLRIJUW", actions={})
 wolframclient = wolframalpha.Client('KHE5G2-42E4UX5AL3')
 googleclient = googlemaps.Client(key='AIzaSyDgc8KUW9ZoOUz65bD2mfSElHj-HmztEaI')
-matlabclient = matlab.start_matlab()
+
 
 class Pod:
 	def __init__(self):
 		self.name = ""
 		self.text = ""
-		self.imgurl = ""
+		self.img = ""
 
 class Witai:
 	def __init__(self):
 		self.query = ""
 		self.response = {}
 		self.intents = []
-		#self.arguments = []
 
 pods = []
 witai = Witai()
 
 
+
+
+
+
+
 # FUNCTIONS
+
+def getintents(query):
+	witai.intents = []
+	witai.query = query
+	try:
+		witai.response = witclient.message(query)
+	except:
+		pass
+	if 'intents' in witai.response['entities']:
+		for intentnum in range(0,len(witai.response['entities']['intents'])):
+			witai.intents.append(witai.response['entities']['intents'][intentnum]['value'])
+	return witai.intents
+
+
+def runaction():
+	for intent in witai.intents:
+		try:
+			actions[intent]()
+		except:
+			pass
+	if len(witai.intents)==0:
+		try:
+			actions["Wolfram"]()
+		except:
+			pass
+	if len(pods)==0:
+		try:
+			actions["Chatbot"]()
+		except:
+			pass
 
 
 def text2speech(text, savefile):
@@ -56,6 +89,14 @@ def text2speech(text, savefile):
 	return data
 
 
+def speech2text():
+	recognizer = sr.Recognizer()
+	with sr.Microphone() as source:
+		audio = recognizer.listen(source)
+	text = recognizer.recognize_google(audio)
+	return text
+
+
 def bot(text):
 	br = mechanize.Browser()
 	br.set_handle_robots(False)
@@ -69,48 +110,23 @@ def bot(text):
 	linkstart = html.find("</form>") + 16
 	linkend = html.find("</p>", linkstart)
 	response = html[linkstart:linkend]
+	response.replace('<br>','\n')
 	return response
-
-
-
-def speech2text():
-	recognizer = sr.Recognizer()
-	with sr.Microphone() as source:
-		audio = recognizer.listen(source)
-	text = recognizer.recognize_google(audio)
-	return text
-
-
-def getnumpods():
-	return len(pods)
-
-
-def getintents(query):
-	witai.query = query
-	witai.response = witclient.message(query)
-	if 'intents' in witai.response['entities']:
-		for intentnum in range(0,len(witai.response['entities']['intents'])):
-			witai.intents.append(witai.response['entities']['intents'][intentnum]['value'])
-	else:
-		if query.find("+") != -1 or query.find("-") != -1 or query.find("*") != -1 or query.find("/") != -1:
-			actions['Wolfram']()
-		if len(pods) == 0:
-			actions['Chatbot']()
-
-
-def runaction():
-	for intent in witai.intents:
-		actions[intent]()    
 
 
 def wolfram():
 	response = wolframclient.query(witai.query)
-	for result in response.results:
+	for pod in response['pod']:
 		pods.append(Pod())
-		pods[-1].name = result['@title']
-		pods[-1].text = result['subpod']['plaintext']
-		pods[-1].imgurl = result['subpod']['img']['@src']
-		print(pods[-1].text)
+		pods[-1].name = pod['@title']
+		if isinstance(pod['subpod'],list):
+			pods[-1].text = pod['subpod'][0]['plaintext']
+			pods[-1].img = "%s.png" % (pods[-1].name)
+			urllib.urlretrieve(pod['subpod'][0]['img']['@src'], "%s.png" % (pods[-1].name))
+		else:
+			pods[-1].text = pod['subpod']['plaintext']
+			pods[-1].img = "%s.png" % (pods[-1].name)
+			urllib.urlretrieve(pod['subpod']['img']['@src'], "%s.png" % (pods[-1].name))
 
 
 def directions():
@@ -134,39 +150,22 @@ def directions():
 	directions = googleclient.directions(currentlocation,destination,mode="driving",departure_time=datetime.now())
 	if (len(directions) != 0):
 		# Update Pods and Long/Lat arrays
-		pods[-2].imgurl = "map.html"
-		pods[-2].text = "Directions from " + directions[0]['legs'][0]['start_address'] + " to " + directions[0]['legs'][0]['end_address']
+		pods[-2].img = 'map-full.png'
+		pods[-2].text = 'Directions from ' + directions[0]['legs'][0]['start_address'] + " to " + directions[0]['legs'][0]['end_address']
 		lat.append(directions[0]['legs'][0]['steps'][0]['start_location']['lat'])
 		lng.append(directions[0]['legs'][0]['steps'][0]['start_location']['lng'])
 		for step in directions[0]['legs'][0]['steps']:
-			pods[-1].text += step['html_instructions'].replace("<b>","").replace("</b>","").replace('<div style="font-size:0.9em">','').replace("</div>","") + "\n"
+			pods[-1].text += step['html_instructions'].replace("<b>","").replace("</b>"," ").replace('<div style="font-size:0.9em">','').replace("</div>"," ") + "\n"
 			lat.append(step['end_location']['lat'])
 			lng.append(step['end_location']['lng'])
-		# Create Map
-		zoom = zoomlevel(directions[0]['bounds']['northeast']['lat'],directions[0]['bounds']['southwest']['lat'],directions[0]['bounds']['northeast']['lng'],directions[0]['bounds']['southwest']['lng'])
-		gmap = gmplot.GoogleMapPlotter(lat[0],lng[0],zoom)
-		gmap.plot(lat,lng,'cornflowerblue',edge_width=10)
-		gmap.draw("map.html")
-
-
-def matlab():
-	lb = witai.query.find('[')
-	ub = witai.query.find(']',lb)
-	if lb != -1 and ub != -1:
-		matrixstring = witai.query[lb:ub]
-		numrows = matrixstring.count(';') + 1
-		matrixstring = matrixstring.replace(","," ").replace(";"," ")[1:]
-		output = matlabclient.reducematrix(matrixstring,numrows)
-		matrix = ''
-		for x in range(numrows):
-			line = '['
-			for y in range(len(output[0])):
-				line += '%6.3f ' % output[x][y]
-			line += ']\n'
-			matrix += line
-		pods.append(Pod())
-		pods[-1].name = "Matrix Row Reduction"
-		pods[-1].text = matrix
+		start = '%0.7f,%0.7f' % (lat[1],lng[1])
+		end = '%0.7f,%0.7f' % (lat[-1],lng[-1])
+		mapcommand = 'https://www.google.com/maps/preview?saddr=%s&daddr=%s&dirflg=r' % (start,end)
+		subprocess.call(['webkit2png',mapcommand,'-W 1100','-H 600','-F','-o map'])
+		img = Image.open(' map-full.png')
+		img = img.resize((586, 330), PIL.Image.ANTIALIAS)
+		img.save('map-full.png')
+		
 
 
 def openapp():
@@ -180,8 +179,15 @@ def chatbot():
 	response = bot(witai.query)
 	if len(response) != 0:
 		pods.append(Pod())
-		pods[-1].name = "GLADoS's Response:"
+		pods[-1].name = "GLADoS:"
 		pods[-1].text = response
+
+
+
+
+
+
+
 
 
 # HELPER FUNCTIONS
@@ -190,24 +196,9 @@ def chatbot():
 actions = {
 	'Wolfram' : wolfram,
 	'Directions' : directions,
-	'Matlab' : matlab,
 	'Openapp' : openapp,
 	'Chatbot' : chatbot
 }
-
-
-def zoomlevel(maxlat,minlat,maxlng,minlng):
-	latdiff = abs(maxlat - minlat)*120/180
-	lngdiff = (maxlng - minlng)*100/360
-	if lngdiff < 0:
-		lngdiff += 100
-	scope = max(latdiff,lngdiff)
-	zoom = 1.4*math.log(1/(8000*scope)) + 20.5
-	if zoom > 18:
-		zoom = 18
-	elif zoom < 2:
-		zoom = 2
-	return zoom
 	
 
 def locationlookup():
@@ -215,3 +206,35 @@ def locationlookup():
 		return json.load(urllib2.urlopen('http://ipinfo.io/json'))['loc']
 	except urllib2.HTTPError:
 		return False
+
+
+if __name__ == "__main__":
+	query = speech2text()
+	print(query)
+	intents = getintents(query)
+	runaction()
+	for pod in pods:
+		print(pod.name)
+		print(pod.text)
+
+
+#import matlab.engine as matlab
+#matlabclient = matlab.start_matlab()
+#def matlab():
+#	lb = witai.query.find('[')
+#	ub = witai.query.find(']',lb)
+#	if lb != -1 and ub != -1:
+#		matrixstring = witai.query[lb:ub]
+#		numrows = matrixstring.count(';') + 1
+#		matrixstring = matrixstring.replace(","," ").replace(";"," ")[1:]
+#		output = matlabclient.reducematrix(matrixstring,numrows)
+#		matrix = ''
+#		for x in range(numrows):
+#			line = '['
+#			for y in range(len(output[0])):
+#				line += '%6.3f ' % output[x][y]
+#			line += ']\n'
+#			matrix += line
+#		pods.append(Pod())
+#		pods[-1].name = "Matrix Row Reduction"
+#		pods[-1].text = matrix
